@@ -632,6 +632,35 @@ DERP provides reachability when direct UDP connectivity fails. It does not repla
 
 For this environment, `tor` refers to the Tailscale DERP region code for Toronto.
 
+## DERP Protocol and NAT Traversal Notes
+
+A key learning from reviewing Tailscale's DERP-related code and coumentation is that DERP does not itself perform NAT traversal. NAT traversal is primarily handled by the Tailscale clients, especially the `magicsock` and `disco` logic.
+
+DERP provides a reliable relay and rendezvous path. It allows nodes to exchange discovery messages and continue communicating while direct UDP connectivity is being attempted. If a direct WireGuard UDP path cannot be established, DERP remains available as the encrypted fallback relay path.
+
+The simplified flow is:
+
+```text
+Node A                         DERP                         Node B
+  |                              |                             |
+  |---- connect/auth to DERP ---->|                             |
+  |                              |<---- connect/auth to DERP --|
+  |                              |                             |
+  |---- encrypted packet to B --->|---- encrypted packet ----->|
+  |                              |                             |
+  |---- DISCO coordination ----->|---- DISCO coordination ---->|
+  |                              |                             |
+  |---- UDP discovery attempts directly between peers -------->|
+  |<-----------------------------------------------------------|
+  |                              |                             |
+  |========= direct WireGuard UDP path selected ===============|
+
+If direct UDP fails, the packet flow remains:
+
+Node A <---- encrypted WireGuard over DERP relay ----> Node B
+```
+This matches the lab result: when UDP was available, Tailscale switched to a direct LAN path. When UDP was blocked, traffic stayed on DERP and tailscale ping reported direct connection not established.
+
 ---
 
 # Cross-Experiment Summary
